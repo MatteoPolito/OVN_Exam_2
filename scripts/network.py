@@ -140,7 +140,7 @@ class Network():
     
     def find_best_latency(self, node1: Node, node2: Node):
         paths = self.filterPathsByStartEnd(node1.label, node2.label)
-        filtered = self.weighted_paths.loc[self.weighted_paths['path'].isin(paths)]
+        filtered = self.weighted_paths.loc[self.weighted_paths['path'].isin(paths)] # isin returns series of True False if they are in the dataframe or not
         print(filtered)
         best = filtered['latency'].min()
         print(best)
