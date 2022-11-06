@@ -6,6 +6,7 @@ import pandas as pd
 from node import Node
 from line import Line
 from signal_information import SignalInformation
+from connection import Connection
 
 class Network():
     def __init__(self, json_path):
@@ -96,7 +97,7 @@ class Network():
         signal = n.propagate(signal)
         return signal
 
-    def createDataframe(self):
+    def createDataframe(self) -> pd.DataFrame:
         self.connect()
         pairs = []
         node_labels = self.nodes.keys()
@@ -129,3 +130,42 @@ class Network():
         df['noise'] = noises
         df['snr'] = snrs
         return df
+    
+    def find_best_snr(self, node1: Node, node2: Node):
+        paths = self.filterPathsByStartEnd(node1.label, node2.label)
+        filtered = self.weighted_paths.loc[self.weighted_paths['path'].isin(paths)]
+        print(filtered)
+        best = filtered['snr'].max()
+        print(best)
+    
+    def find_best_latency(self, node1: Node, node2: Node):
+        paths = self.filterPathsByStartEnd(node1.label, node2.label)
+        filtered = self.weighted_paths.loc[self.weighted_paths['path'].isin(paths)]
+        print(filtered)
+        best = filtered['latency'].min()
+        print(best)
+        
+    def filterPathsByStartEnd(self, start, end):
+       return [path for path in self.weighted_paths['path'].values
+                 if (path[0] == start) and (path[-1] == end)]
+       
+    def stream(self, connections: Connection, best='latency'):
+        streamed_connections = []
+        for connection in connections:
+            input_node = connection.input_node
+            output_node = connection.output_node
+            signal_power = connection.signal_power
+            self.weighted_paths(signal_power)
+            if best == 'latency':
+                path = self.find_best_latency(input_node, output_node)
+            elif best == 'snr':
+                path = self.find_best_snr(input_node, output_node)
+            else:
+                print('ERROR: best input not recognized. Value:', best)
+                break
+            signal = SignalInformation(signal_power, path)
+            signal = self.propagate(signal)
+            connection.latency = signal.latency
+            connection.snr = 10*np.log10(signal_power/signal.noise)
+            streamed_connections.append(connection)
+        return streamed_connections
