@@ -4,6 +4,7 @@ class SignalInformation():
         self._path = path
         self._noise = 0
         self._latency = 0
+        self.propagationStopped = False
 
     @property
     def power(self):

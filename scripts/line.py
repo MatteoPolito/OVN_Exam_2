@@ -5,6 +5,15 @@ class Line():
         self._label = line['label']
         self._length = line['length']
         self._successive = {}
+        self._state = 1
+        
+    @property
+    def state(self):
+        return self._state
+    
+    @state.setter
+    def state(self, state):
+        self._state = state
 
     @property
     def label(self):
@@ -37,7 +46,14 @@ class Line():
     def noise_generation(self, sig_power):
         return sig_power / (2 * self.length)
 
-    def propagate(self, signal: SignalInformation):
+    def propagate(self, signal: SignalInformation, occupate = False):
+        if occupate:
+            if self.state == 0:
+                signal.propagationStopped = True
+                return signal
+            else:
+                self.state = 0
+        
         latency = self.latency_generation()
         signal.add_latency(latency)
 
@@ -45,5 +61,5 @@ class Line():
         signal.add_noise(noise)
 
         node = self.successive[signal.path[0]]
-        signal = node.propagate(signal)
+        signal = node.propagate(signal, occupate)
         return signal
