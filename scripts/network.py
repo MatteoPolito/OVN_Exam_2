@@ -27,6 +27,8 @@ class Network():
                 lineData['length'] = math.sqrt(math.pow(n1_pos[0] - n2_pos[0], 2) + math.pow(n1_pos[1] - n2_pos[1], 2))
                 line = Line(lineData)
                 self.lines[line.label] = line
+        
+        self.weighted_paths = self.createDataframe()
 
     @property
     def nodes(self):
