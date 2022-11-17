@@ -92,12 +92,12 @@ class Network():
             line.successive[n2.label] = n2
 
     def propagate(self, signal: SignalInformation) -> SignalInformation:
-        path = signal.path
-        n = self.nodes[path[0]] # Starting node
+        print(signal.path)
+        n = self.nodes[signal.path[0]] # Starting node
         signal = n.propagate(signal)
         return signal
 
-    def createDataframe(self) -> pd.DataFrame:
+    def createDataframe(self, power = 1) -> pd.DataFrame:
         self.connect()
         pairs = []
         node_labels = self.nodes.keys()
@@ -119,7 +119,7 @@ class Network():
                     path_string += node + '->'
                 paths.append(path_string[:-2]) # removing last '->'
 
-                signal = SignalInformation(1, path)
+                signal = SignalInformation(power, path)
                 signal = self.propagate(signal)
                 latencies.append(signal.latency)
                 noises.append(signal.noise)
@@ -131,41 +131,67 @@ class Network():
         df['snr'] = snrs
         return df
     
-    def find_best_snr(self, node1: Node, node2: Node):
-        paths = self.filterPathsByStartEnd(node1.label, node2.label)
+    def find_best_snr(self, node1: str, node2: str):
+        paths = self.available_paths(node1, node2)
         filtered = self.weighted_paths.loc[self.weighted_paths['path'].isin(paths)]
-        print(filtered)
         best = filtered['snr'].max()
-        print(best)
+        path = filtered.loc[filtered['snr'] == best, 'path'].iloc[0]
+        return path.replace('->', '')
     
-    def find_best_latency(self, node1: Node, node2: Node):
-        paths = self.filterPathsByStartEnd(node1.label, node2.label)
+    def find_best_latency(self, node1: str, node2: str):
+        paths = self.available_paths(node1, node2)
         filtered = self.weighted_paths.loc[self.weighted_paths['path'].isin(paths)] # isin returns series of True False if they are in the dataframe or not
-        print(filtered)
         best = filtered['latency'].min()
-        print(best)
+        path = filtered.loc[filtered['latency'] == best, 'path'].iloc[0]
+        if path == None:
+            return None
+        return path.replace('->', '')
         
     def filterPathsByStartEnd(self, start, end):
-       return [path for path in self.weighted_paths['path'].values
+        paths = [path for path in self.weighted_paths['path'].values
                  if (path[0] == start) and (path[-1] == end)]
+        #for path in paths:
+        #    path.replace('->', '')
+        return paths
        
-    def stream(self, connections: Connection, best='latency'):
+    def stream(self, connections, best='latency'):
         streamed_connections = []
         for connection in connections:
-            input_node = connection.input_node
-            output_node = connection.output_node
-            signal_power = connection.signal_power
-            self.weighted_paths(signal_power)
+            # Creating new dataFrame in order to find best latency and snr
+            self.weighted_paths = self.createDataframe(connection.signal_power)
             if best == 'latency':
-                path = self.find_best_latency(input_node, output_node)
+                path = self.find_best_latency(connection.input_node, connection.output_node)
             elif best == 'snr':
-                path = self.find_best_snr(input_node, output_node)
+                path = self.find_best_snr(connection.input_node, connection.output_node)
             else:
-                print('ERROR: best input not recognized. Value:', best)
+                print("ERROR: parameter 'best' not set properly:", best)
                 break
-            signal = SignalInformation(signal_power, path)
+            
+            signal = SignalInformation(connection.signal_power, path)
             signal = self.propagate(signal)
-            connection.latency = signal.latency
-            connection.snr = 10*np.log10(signal_power/signal.noise)
+            if path == None:
+                connection.latency = None
+                connection.snr = 0
+            else :
+                connection.latency = signal.latency
+                connection.snr = 10*np.log10(connection.signal_power/signal.noise)
             streamed_connections.append(connection)
         return streamed_connections
+    
+    def available_paths(self, input_node, output_node):
+        # Getting all paths btw input and output node
+        all_paths = self.filterPathsByStartEnd(input_node, output_node)
+        # Getting busy lines to see if the entire path is free or not (if it contains the following path)
+        busy_lines = [line for line in self.lines
+                      if self.lines[line].state == 0]
+        
+        available_paths = []
+        for path in all_paths:
+            available = True
+            for line in busy_lines:
+                if line[0] + '->' + line[1] in path: 
+                    available = False
+                    break
+            if available:
+                available_paths.append(path)
+        return available_paths

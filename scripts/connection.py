@@ -4,7 +4,7 @@ from signal_information import SignalInformation
 class Connection():
     def __init__(self, input_node, output_node, signal_power) -> None:
         self._input_node = input_node
-        self._ouput_node = output_node
+        self._output_node = output_node
         self._signal_power = signal_power
         self._latency = 0
         self._snr = 0
@@ -14,8 +14,8 @@ class Connection():
         return self._input_node
     
     @property
-    def ouput_node(self):
-        return self._ouput_node
+    def output_node(self):
+        return self._output_node
     
     @property
     def signal_power(self):

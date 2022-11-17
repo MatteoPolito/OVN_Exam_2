@@ -5,7 +5,7 @@ class Line():
         self._label = line['label']
         self._length = line['length']
         self._successive = {}
-        self._state = 1
+        self._state = 1 # 1: free - 2 occupied
         
     @property
     def state(self):

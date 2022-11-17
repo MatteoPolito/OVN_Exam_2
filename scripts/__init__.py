@@ -4,9 +4,7 @@ from connection import Connection
 import matplotlib.pyplot as plt
 
 net = Network('s237002.json')
-net.find_best_snr(net.nodes['A'], net.nodes['B'])
-net.connect()
-node_labels = list(net.nodes.keys ())
+node_labels = list(net.nodes.keys())
 connections = []
 for i in range(100):
     shuffle(node_labels)

@@ -39,11 +39,11 @@ class Node():
     def successive(self, successive):
         self._successive = successive
 
-    def propagate(self, signal: SignalInformation, occupate = False):
+    def propagate(self, signal: SignalInformation, busy = False):
         if len(signal.path) > 1:
             line_label = signal.path[:2]
             line = self.successive[line_label]
             signal.next()
-            signal = line.propagate(signal, occupate)
+            signal = line.propagate(signal, busy)
         
         return signal
