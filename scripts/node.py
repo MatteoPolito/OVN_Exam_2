@@ -1,4 +1,4 @@
-from signal_information import SignalInformation
+from signal_information import Lightpath
 
 class Node():
     def __init__(self, node):
@@ -39,11 +39,20 @@ class Node():
     def successive(self, successive):
         self._successive = successive
 
-    def propagate(self, signal: SignalInformation, busy = False):
+    def propagate(self, signal: Lightpath):
         if len(signal.path) > 1:
             line_label = signal.path[:2]
             line = self.successive[line_label]
             signal.next()
-            signal = line.propagate(signal, busy)
+            signal = line.propagate(signal)
+        
+        return signal
+    
+    def probe(self, signal: Lightpath):
+        if len(signal.path) > 1:
+            line_label = signal.path[:2]
+            line = self.successive[line_label]
+            signal.next()
+            signal = line.propagate(signal)
         
         return signal

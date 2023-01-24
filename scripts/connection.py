@@ -1,5 +1,5 @@
 import numpy as np
-from signal_information import SignalInformation
+from signal_information import Lightpath
 
 class Connection():
     def __init__(self, input_node, output_node, signal_power) -> None:
