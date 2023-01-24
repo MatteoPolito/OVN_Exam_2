@@ -1,17 +1,21 @@
 import json
 import math
+import random
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 from node import Node
 from line import Line
-from signal_information import SignalInformation
+from signal_information import Lightpath
+from connection import Connection
 
 class Network():
     def __init__(self, json_path):
         node_json = json.load(open(json_path, 'r'))
         self._nodes = {}
         self._lines = {}
+        self._route_space = None
+        
         for node_label in node_json:
             # Creating Node
             nodeData = node_json[node_label]
@@ -27,6 +31,8 @@ class Network():
                 lineData['length'] = math.sqrt(math.pow(n1_pos[0] - n2_pos[0], 2) + math.pow(n1_pos[1] - n2_pos[1], 2))
                 line = Line(lineData)
                 self.lines[line.label] = line
+        
+        self.weighted_paths = self.createDataframe()
 
     @property
     def nodes(self):
@@ -35,6 +41,14 @@ class Network():
     @property
     def lines(self):
         return self._lines
+    
+    @property
+    def route_space(self):
+        return self._route_space
+    
+    @route_space.setter
+    def route_space(self, route_space):
+        self._route_space = route_space
 
     def draw(self):
         for n_label in self.nodes:
@@ -88,13 +102,17 @@ class Network():
             line.successive[n1.label] = n1
             line.successive[n2.label] = n2
 
-    def propagate(self, signal: SignalInformation) -> SignalInformation:
-        path = signal.path
-        n = self.nodes[path[0]] # Starting node
+    def propagate(self, signal: Lightpath) -> Lightpath:
+        n = self.nodes[signal.path[0]] # Starting node
         signal = n.propagate(signal)
         return signal
+    
+    def probe(self, signal: Lightpath) -> Lightpath:
+        n = self.nodes[signal.path[0]] # Starting node
+        signal = n.probe(signal)
+        return signal
 
-    def createDataframe(self):
+    def createDataframe(self, power = 1) -> pd.DataFrame:
         self.connect()
         pairs = []
         node_labels = self.nodes.keys()
@@ -116,7 +134,7 @@ class Network():
                     path_string += node + '->'
                 paths.append(path_string[:-2]) # removing last '->'
 
-                signal = SignalInformation(1, path)
+                signal = Lightpath(power, path, random.randint(0,9))
                 signal = self.propagate(signal)
                 latencies.append(signal.latency)
                 noises.append(signal.noise)
@@ -126,4 +144,73 @@ class Network():
         df['latency'] = latencies
         df['noise'] = noises
         df['snr'] = snrs
+        
+        # Creating Route Space DF
+        self.route_space = pd.DataFrame()
+        self.route_space['path'] = paths
+        for i in range(10):
+            self.route_space[str(i)] = ['free'] * len(paths)
+        
         return df
+    
+    def find_best_snr(self, node1: str, node2: str):
+        paths = self.available_paths(node1, node2)
+        filtered = self.weighted_paths.loc[self.weighted_paths['path'].isin(paths)]
+        best = filtered['snr'].max()
+        path = filtered.loc[filtered['snr'] == best, 'path'].iloc[0]
+        return path
+    
+    def find_best_latency(self, node1: str, node2: str):
+        paths = self.available_paths(node1, node2)
+        filtered = self.weighted_paths.loc[self.weighted_paths['path'].isin(paths)] # isin returns series of True False if they are in the dataframe or not
+        best = filtered['latency'].min()
+        path = filtered.loc[filtered['latency'] == best, 'path'].iloc[0]
+        if path == None:
+            return None
+        return path
+        
+    def filterPathsByStartEnd(self, start, end):
+        paths = [path for path in self.weighted_paths['path'].values
+                 if (path[0] == start) and (path[-1] == end)]
+        return paths
+       
+    def stream(self, connections, best='latency'):
+        streamed_connections = []
+        for connection in connections:
+            # Creating new dataFrame in order to find best latency and snr
+            #self.weighted_paths = self.createDataframe(connection.signal_power)
+            if best == 'latency':
+                path = self.find_best_latency(connection.input_node, connection.output_node)
+            elif best == 'snr':
+                path = self.find_best_snr(connection.input_node, connection.output_node)
+            else:
+                print("ERROR: parameter 'best' not set properly:", best)
+                break
+            
+            signal = Lightpath(connection.signal_power, path.replace('->', ''), random.randint(0,9))
+            signal = self.propagate(signal)
+            if path == None:
+                connection.latency = None
+                connection.snr = 0
+            else:
+                connection.latency = signal.latency
+                connection.snr = 10*np.log10(connection.signal_power/signal.noise)
+                # Update available paths (Path Occupancy)
+                self.route_space.loc[self.route_space['path'] == path, str(signal.channel)] = 'busy'
+            
+            print(self.route_space)
+            streamed_connections.append(connection)
+        return streamed_connections
+    
+    def available_paths(self, input_node, output_node):
+        # Getting all paths btw input and output node
+        all_paths = self.filterPathsByStartEnd(input_node, output_node)
+        
+        available_paths = []
+        for path in all_paths:
+            filt = self.route_space['path'] == path
+            av = self.route_space.loc[filt].values[0][1:10]
+            if 'free' in av:
+                available_paths.append(path)
+        return available_paths
+        

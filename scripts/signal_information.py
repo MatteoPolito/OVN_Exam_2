@@ -4,6 +4,7 @@ class SignalInformation():
         self._path = path
         self._noise = 0
         self._latency = 0
+        self.propagationStopped = False
 
     @property
     def power(self):
@@ -46,3 +47,16 @@ class SignalInformation():
     def next(self):
         self.path = self.path[1:]
     
+    
+class Lightpath(SignalInformation):
+    def __init__(self, power, path, channel):
+        super().__init__(power, path)
+        self._channel = channel # Integer: Indicates frequency slot the signal occupies when is propagated
+        
+    @property
+    def channel(self):
+        return self._channel
+    
+    @channel.setter
+    def channel(self, channel):
+        self._channel = channel
