@@ -4,6 +4,7 @@ from connection import Connection
 import matplotlib.pyplot as plt
 
 net = Network('s237002.json')
+net.plotBitRate_GSNR()
 node_labels = list(net.nodes.keys())
 connections = []
 for i in range(100):

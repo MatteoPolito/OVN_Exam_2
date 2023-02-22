@@ -8,6 +8,9 @@ from node import Node
 from line import Line
 from signal_information import Lightpath
 from connection import Connection
+from scipy.special import erfinv
+
+plt.style.use('seaborn')
 
 class Network():
     def __init__(self, json_path):
@@ -76,7 +79,6 @@ class Network():
         path += curNode.label
         # if i reached the end node i can return the found path
         if(curNode.label == endNode.label):
-            #print("End Reached!", path)
             result.append(path)
 
         # i will try all possible ways in the adjacents nodes
@@ -198,7 +200,6 @@ class Network():
                 # Update available paths (Path Occupancy)
                 self.route_space.loc[self.route_space['path'] == path, str(signal.channel)] = 'busy'
             
-            print(self.route_space)
             streamed_connections.append(connection)
         return streamed_connections
     
@@ -214,3 +215,68 @@ class Network():
                 available_paths.append(path)
         return available_paths
         
+    def calculate_bit_rate(self, path, strategy):
+        Rs = 32 # Symbol Rate
+        Bn = 12.5 # Noise Bandwidth
+        BERt = 0.001 # Bit Error Rate
+        br = 0
+        row_index = self.weighted_paths[self.weighted_paths['path'] == path].index.values[0]
+        snr = self.weighted_paths.at[row_index, 'snr']
+        gsnr = 10 ** (snr / 10) # Geometric SNR - (Linear SNR)
+        match strategy:
+            case 'fixed-rate':
+                limit = 2 * erfinv(1 - 2 * BERt) ** 2 * Rs / Bn
+                if(gsnr >= limit):
+                    br = 100
+                pass
+            case 'flex-rate':
+                limit = 2 * erfinv(1 - 2 * BERt) ** 2 * Rs / Bn
+                limit_2 = 14/3 * erfinv(1 - 3 / 2 * BERt) ** 2 * Rs / Bn
+                limit_3 = 10 * erfinv(1 - 8 / 3 * BERt) ** 2 * Rs / Bn
+                if (limit <= gsnr and gsnr < limit_2):
+                    br = 100
+                elif (limit_2 <= gsnr and gsnr < limit_3):
+                    br = 200
+                elif gsnr >= limit_3:
+                    br = 400
+                pass
+            case 'shannon':
+                br = 2 * Rs * math.log2(1 + gsnr * (Rs / Bn))
+                pass
+            case _:
+                print("Error: unavailable strategy!")
+            
+        return br
+    
+    def plotBitRate_GSNR(self):
+        paths = self.weighted_paths['path'].values
+        strategies = [
+            {"id": "fixed-rate", "name": "Fixed Rate"},
+            {"id": "flex-rate", "name": "Flex Rate"},
+            {"id": "shannon", "name": "Shannon"}
+        ]
+        
+        fig = plt.figure(figsize=(10, 8))
+        plt.subplots_adjust(hspace=0.3)
+        plotCount = 1
+        rows, cols = 2, 2
+        
+        for s in strategies:
+            ax = fig.add_subplot(rows, cols, plotCount)
+            # Calculate bit rates
+            bit_rates = []
+            snrs = []
+            for path in paths:
+                row_index = self.weighted_paths[self.weighted_paths['path'] == path].index.values[0]
+                snr = self.weighted_paths.at[row_index, 'snr']
+                snrs.append(snr)
+                bit_rates.append(self.calculate_bit_rate(path, s['id']))
+                
+            ax.plot(bit_rates, label='Bit Rate')
+            ax.plot(snrs, label='SNR')
+            ax.legend()
+            ax.set_title(s['name'])
+            plotCount = plotCount + 1
+            
+        plt.tight_layout()
+        plt.show()

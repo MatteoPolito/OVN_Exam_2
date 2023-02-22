@@ -6,6 +6,7 @@ class Node():
         self._position = node['position']
         self._connected_nodes = node['connected_nodes']
         self._successive = {}
+        self.transceiver = 'fixed-rate'
 
     @property
     def label(self):
