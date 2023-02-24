@@ -9,6 +9,7 @@ from line import Line
 from signal_information import Lightpath
 from connection import Connection
 from scipy.special import erfinv
+from utils import Utils
 
 plt.style.use('seaborn')
 
@@ -191,16 +192,25 @@ class Network():
             
             signal = Lightpath(connection.signal_power, path.replace('->', ''), random.randint(0,9))
             signal = self.propagate(signal)
+            
+            # Check on path
             if path == None:
                 connection.latency = None
                 connection.snr = 0
             else:
+                # Check on Rejected connection
+                strategy = self.nodes[path[0]].transceiver
+                connection.bit_rate = self.calculate_bit_rate(path, strategy)
+                if connection.bit_rate == 0:
+                    print("Connection Rejected")
                 connection.latency = signal.latency
                 connection.snr = 10*np.log10(connection.signal_power/signal.noise)
                 # Update available paths (Path Occupancy)
                 self.route_space.loc[self.route_space['path'] == path, str(signal.channel)] = 'busy'
             
-            streamed_connections.append(connection)
+            # Pushing only non rejected connections
+            if connection.bit_rate != 0:
+                streamed_connections.append(connection)
         return streamed_connections
     
     def available_paths(self, input_node, output_node):
@@ -222,7 +232,7 @@ class Network():
         br = 0
         row_index = self.weighted_paths[self.weighted_paths['path'] == path].index.values[0]
         snr = self.weighted_paths.at[row_index, 'snr']
-        gsnr = 10 ** (snr / 10) # Geometric SNR - (Linear SNR)
+        gsnr = Utils.dbToLinear(snr) # Geometric SNR - (Linear SNR)
         match strategy:
             case 'fixed-rate':
                 limit = 2 * erfinv(1 - 2 * BERt) ** 2 * Rs / Bn
@@ -265,17 +275,24 @@ class Network():
             ax = fig.add_subplot(rows, cols, plotCount)
             # Calculate bit rates
             bit_rates = []
+            bit_rates_total = []
             snrs = []
             for path in paths:
                 row_index = self.weighted_paths[self.weighted_paths['path'] == path].index.values[0]
                 snr = self.weighted_paths.at[row_index, 'snr']
                 snrs.append(snr)
-                bit_rates.append(self.calculate_bit_rate(path, s['id']))
+                br = self.calculate_bit_rate(path, s['id'])
+                bit_rates.append(br)
+                bit_rates_total.append(Utils.dbToLinear(snr))
                 
-            ax.plot(bit_rates, label='Bit Rate')
-            ax.plot(snrs, label='SNR')
-            ax.legend()
-            ax.set_title(s['name'])
+            av = np.array(bit_rates_total).mean()
+            max = np.array(bit_rates_total).max()
+            print(s, av, max)
+                
+            ax.plot(snrs, bit_rates)
+            ax.set_title(s['name'], color='red')
+            ax.set_xlabel('SNR (dB)', fontsize=8)
+            ax.set_ylabel('Bit Rate (Gbps)', fontsize=8)
             plotCount = plotCount + 1
             
         plt.tight_layout()
